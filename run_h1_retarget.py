@@ -5,37 +5,18 @@ time: 2024/06/26
 
 import time
 import numpy as np
-
+import math
 from pybullet_utils import transformations
 import pybullet
 import pybullet_data as pd
 from qibullet import SimulationManager
 import pandas as pds
 
-import util.retarget_config_nao as config
+import util.retarget_config_h1 as config
 from util.read_txt import read_txt_file
 
 
-POS_SIZE = 3
-ROT_SIZE = 4
-DEFAULT_ROT = np.array([0, 0, 0, 1])
-FORWARD_DIR = np.array([1, 0, 0])
-
-GROUND_URDF_FILENAME = "plane_implicit.urdf"
-
-# reference motion
-REF_COORD_ROT = transformations.quaternion_from_euler(0.5 * np.pi, 0, 0)
-REF_POS_OFFSET = np.array([0, 0, 0])
-REF_ROOT_ROT = transformations.quaternion_from_euler(0, 0, 0.5 * np.pi)
-
-REF_jOINT_NUM = 15
-REF_HIP_JOINT_ID = 0
-REF_NECK_JOINT_ID = 7
-REF_HEAD_JOINT_ID = 14
-REF_HIP_JOINT_IDS = [1, 4, 8, 11]
-REF_MID_JOINT_IDS = [2, 5, 9, 12]
-REF_TOE_JOINT_IDS = [3, 6, 10, 13]
-lock = 0
+H1_joint_label = config.H1_joint_label
 
 def quaternion_from_euler(r,p,y)
 
@@ -59,75 +40,10 @@ def quaternion_to_angle_axis(q):
         axis_z = z / sin_theta_over_2
     else:
         # 当旋转角度很小的时候，旋转轴不重要，可以取任意单位向量
-        axis_x = 1
+        axis_x = 0
         axis_y = 0
-        axis_z = 0
+        axis_z = 1
     return theta, (axis_x, axis_y, axis_z)
-
-def QuaternionRotatePoint(point, quat):
-    q_point = np.array([point[0], point[1], point[2], 0.0])
-    quat_inverse = transformations.quaternion_inverse(quat)
-    q_point_rotated = transformations.quaternion_multiply(
-      transformations.quaternion_multiply(quat, q_point), quat_inverse)
-    return q_point_rotated[:3]
-
-
-def calc_heading(q):
-    """
-    Returns the heading of a rotation q, specified as a quaternion.
-    The heading represents the rotational component of q along the vertical
-    axis (z axis).
-
-    Args:
-    q: A quaternion that the heading is to be computed from.
-
-    Returns:
-    An angle representing the rotation about the z axis.
-    """
-    ref_dir = np.array([1, 0, 0])
-    rot_dir = QuaternionRotatePoint(ref_dir, q)
-    heading = np.arctan2(rot_dir[1], rot_dir[0])
-    return heading
-
-
-def calc_heading_rot(q):
-    """
-    Return a quaternion representing the heading rotation of q along the vertical axis (z axis).
-    Args:
-      q: A quaternion that the heading is to be computed from.
-
-    Returns:
-      A quaternion representing the rotation about the z axis.
-    """
-    heading = calc_heading(q)
-    q_heading = transformations.quaternion_about_axis(heading, [0, 0, 1])
-    return q_heading
-
-
-def build_markers(num_markers):
-    marker_radius = 0.02
-
-    markers = []
-    for i in range(num_markers):
-        if (i == REF_NECK_JOINT_ID) or (i == REF_HIP_JOINT_ID) or (i in REF_HIP_JOINT_IDS):
-            col = [0, 0, 1, 1]  # blue
-        elif (i in REF_TOE_JOINT_IDS) or (i == REF_HEAD_JOINT_ID):
-            col = [1, 0, 0, 1]  # red
-        else:
-            col = [0, 1, 0, 1]  # green
-
-        virtual_shape_id = pybullet.createVisualShape(shapeType=pybullet.GEOM_SPHERE,
-                                                      radius=marker_radius,
-                                                      rgbaColor=col)
-        body_id =  pybullet.createMultiBody(baseMass=0,
-                                            baseCollisionShapeIndex=-1,
-                                            baseVisualShapeIndex=virtual_shape_id,
-                                            basePosition=[0, 0, 0],
-                                            useMaximalCoordinates=True)
-        markers.append(body_id)
-
-    return markers
-
 
 def get_joint_limits(robot):
     num_joints = pybullet.getNumJoints(robot)
@@ -143,33 +59,6 @@ def get_joint_limits(robot):
           joint_limit_high.append(joint_info[9])
 
     return joint_limit_low, joint_limit_high
-
-
-def get_root_pos(pose):
-    return pose[0:POS_SIZE]
-
-
-def get_root_rot(pose):
-    return pose[POS_SIZE:(POS_SIZE + ROT_SIZE)]
-
-
-def get_joint_pose(pose):
-    return pose[(POS_SIZE + ROT_SIZE):]
-
-
-def set_root_pos(root_pos, pose):
-    pose[0:POS_SIZE] = root_pos
-    return
-
-
-def set_root_rot(root_rot, pose):
-    pose[POS_SIZE:(POS_SIZE + ROT_SIZE)] = root_rot
-    return
-
-
-def set_joint_pose(joint_pose, pose):
-    pose[(POS_SIZE + ROT_SIZE):] = joint_pose
-    return
 
 
 def set_pose(robot, pose):
@@ -280,62 +169,59 @@ def retarget_root_pose(ref_joint_pos, get_motion_name, init_rotation):
 
 
 # compute the pose of nao in every frame
-def retarget_pose(robot, default_pose, ref_joint_pos, _motion_name, init_rot):
-    joint_lim_low, joint_lim_high = get_joint_limits(robot)
+def retarget_pose(human_pose):
+    target_pose = np.zeros(len(H1_joint_label))
+    target_pose_mask = np.ones(len(H1_joint_label))
+    # left and right hip
+    left_hip_pose = human_pose[0]
+    right_hip_pose = human_pose[1]
+    target_pose[0] = left_hip_pose[2]
+    target_pose[1] = left_hip_pose[0]
+    target_pose[2] = left_hip_pose[1]
+    target_pose[5] = right_hip_pose[2]
+    target_pose[6] = right_hip_pose[0]
+    target_pose[7] = right_hip_pose[1]
 
-    root_pos, root_rot = retarget_root_pose(ref_joint_pos, _motion_name, init_rot)  # INIT_POS, INIT_ROT
-    root_pos += config.SIM_ROOT_OFFSET
+    # left and right hip
+    left_shoulder_pose = human_pose[15]
+    right_shoulder_pose = human_pose[16]
+    target_pose[11] = left_shoulder_pose[1]
+    target_pose[12] = left_shoulder_pose[0]
+    target_pose[13] = left_shoulder_pose[2]
+    target_pose[15] = right_shoulder_pose[1]
+    target_pose[16] = right_shoulder_pose[0]
+    target_pose[17] = right_shoulder_pose[2] 
 
-    pybullet.resetBasePositionAndOrientation(robot, root_pos, root_rot)
+    # left and right knee
+    left_knee_pose = human_pose[3]
+    left_knee_pose, _ = quaternion_to_angle_axis(quaternion_from_euler(left_knee_pose))
+    right_knee_pose = human_pose[4]
+    right_knee_pose, _ = quaternion_to_angle_axis(quaternion_from_euler(right_knee_pose))
+    target_pose[3] = left_knee_pose
+    target_pose[8] = right_knee_pose
 
-    inv_init_rot = transformations.quaternion_inverse(init_rot)
-    heading_rot = calc_heading_rot(transformations.quaternion_multiply(root_rot, inv_init_rot))  # 得到绕着z轴旋转的四元数
+    # left and right ankle
+    left_ankle_pose = human_pose[6]
+    left_ankle_pose, _ = quaternion_to_angle_axis(quaternion_from_euler(left_ankle_pose))
+    right_ankle_pose = human_pose[7]
+    right_ankle_pose, _ = quaternion_to_angle_axis(quaternion_from_euler(right_ankle_pose))
+    target_pose[4] = left_ankle_pose
+    target_pose[9] = right_ankle_pose
 
-    tar_toe_mid_pos = []
-    for i in range(len(REF_TOE_JOINT_IDS)):
-        ref_toe_id = REF_TOE_JOINT_IDS[i]
-        ref_mid_id = REF_MID_JOINT_IDS[i]
-        ref_hip_id = REF_HIP_JOINT_IDS[i]
-        sim_toe_id = config.SIM_TOE_JOINT_IDS[i]
-        sim_mid_id = config.SIM_MID_JOINT_IDS[i]
-        sim_hip_id = config.SIM_HIP_JOINT_IDS[i]
-        toe_offset_local = config.SIM_TOE_OFFSET_LOCAL[i]
-        mid_offset_local = config.SIM_MID_OFFSET_LOCAL[i]
+    # left and right elbow
+    left_elbow_pose = human_pose[17]
+    left_elbow_pose, _ = quaternion_to_angle_axis(quaternion_from_euler(left_elbow_pose))
+    right_elbow_pose = human_pose[18]
+    right_elbow_pose, _ = quaternion_to_angle_axis(quaternion_from_euler(right_elbow_pose))
+    target_pose[14] = left_elbow_pose
+    target_pose[18] = right_elbow_pose
 
-        ref_toe_pos = ref_joint_pos[ref_toe_id]
-        ref_mid_pos = ref_joint_pos[ref_mid_id]
-        ref_hip_pos = ref_joint_pos[ref_hip_id]
+    # torso
+    target_pose_mask[10] = 0
+    #elbow_pose = human_pose[10]
+    #target_pose[10] = left_elbow_pose[1]
 
-        toe_link_state = pybullet.getLinkState(robot, sim_toe_id, computeForwardKinematics=True)
-        mid_link_state = pybullet.getLinkState(robot, sim_mid_id, computeForwardKinematics=True)
-        hip_link_state = pybullet.getLinkState(robot, sim_hip_id, computeForwardKinematics=True)
-        sim_toe_pos = np.array(toe_link_state[4])  # world position
-        sim_mid_pos = np.array(mid_link_state[4])
-        sim_hip_pos = np.array(hip_link_state[4])
-
-        toe_offset_world = QuaternionRotatePoint(toe_offset_local, heading_rot)
-        mid_offset_world = QuaternionRotatePoint(mid_offset_local, heading_rot)
-
-        ref_hip_toe_delta = ref_toe_pos - ref_hip_pos
-        sim_tar_toe_pos = sim_hip_pos + ref_hip_toe_delta
-
-        ref_hip_mid_delta = ref_mid_pos - ref_hip_pos
-        sim_tar_mid_pos = sim_mid_pos + ref_hip_mid_delta
-
-        tar_toe_mid_pos.append(sim_tar_toe_pos)
-        tar_toe_mid_pos.append(sim_tar_mid_pos)
-    # depending on the state of toe, the relative position of all joints can be acquired
-    joint_pose = pybullet.calculateInverseKinematics2(robot, config.SIM_TOE_MID_JOINT_IDS,
-                                                      tar_toe_mid_pos,
-                                                      jointDamping=config.JOINT_DAMPING,
-                                                      lowerLimits=joint_lim_low,
-                                                      upperLimits=joint_lim_high,
-                                                      restPoses=default_pose)
-    joint_pose = np.array(np.concatenate([joint_pose[0:20], joint_pose[28:34]]))
-
-    pose = np.concatenate([root_pos, root_rot, joint_pose])
-
-    return pose
+    return target_pose, target_pose_mask
 
 
 def update_camera(robot):
@@ -433,12 +319,14 @@ def output_motion(frames, out_filename, frame_duration):
 def main(body_pose, hand_pose, face_poset_data):
 
     len_motion, num_body_pose = body_pose.shape
+    target_poses = []
 
     for i in range(len_motion):
-        cur_body_pose = np.reshape(body_pose[i], (-1, 3))
-
+        current_body_pose = np.reshape(body_pose[i], (-1, 3))
+        target_pose, target_pose_mask = retarget_pose(current_body_pose)
+        target_poses.append(target_pose)
     
-    
+    target_poses = np.stack(target_poses, 0)
 
 
 if __name__ == "__main__":

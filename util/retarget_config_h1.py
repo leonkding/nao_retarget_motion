@@ -55,7 +55,7 @@ SMPL_JOINT_NAMES = [
     "right_wrist",
 ]
 
-H1 = [
+H1_joint_label = [
 "left_hip_yaw",
 "left_hip_roll",
 "left_hip_pitch",
