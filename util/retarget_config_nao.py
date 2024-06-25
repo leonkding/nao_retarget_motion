@@ -1,35 +1,35 @@
 import numpy as np
 
-URDF_FILENAME = "D:/my_data/MachineLearning/Python_Code/Bair_paper_code/robot_data/nao.urdf"
+URDF_FILENAME = "/robot_data/h1.urdf"
 
-MOTOR_NAMES = [
-    "HeadYaw",
-    "HeadPitch",
-    "LHipYawPitch",
-    "LHipRoll",
-    "LHipPitch",
-    "LKneePitch",
-    "LAnklePitch",
-    "LAnkleRoll",
-    "RHipYawPitch",
-    "RHipRoll",
-    "RHipPitch",
-    "RKneePitch",
-    "RAnklePitch",
-    "RAnkleRoll",
-    "LShoulderPitch",
-    "LShoulderRoll",
-    "LElbowYaw",
-    "LElbowRoll",
-    "LWristYaw",
-    "LHand",
-    "RShoulderPitch",
-    "RShoulderRoll",
-    "RElbowYaw",
-    "RElbowRoll",
-    "RWristYaw",
-    "RHand"
-]
+# MOTOR_NAMES = [
+#     "HeadYaw",
+#     "HeadPitch",
+#     "LHipYawPitch",
+#     "LHipRoll",
+#     "LHipPitch",
+#     "LKneePitch",
+#     "LAnklePitch",
+#     "LAnkleRoll",
+#     "RHipYawPitch",
+#     "RHipRoll",
+#     "RHipPitch",
+#     "RKneePitch",
+#     "RAnklePitch",
+#     "RAnkleRoll",
+#     "LShoulderPitch",
+#     "LShoulderRoll",
+#     "LElbowYaw",
+#     "LElbowRoll",
+#     "LWristYaw",
+#     "LHand",
+#     "RShoulderPitch",
+#     "RShoulderRoll",
+#     "RElbowYaw",
+#     "RElbowRoll",
+#     "RWristYaw",
+#     "RHand"
+# ]
 
 REF_POS_SCALE = 1
 

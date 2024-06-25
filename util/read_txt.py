@@ -1,3 +1,4 @@
+import numpy as np
 
 def read_txt_file(file_path):
     name = []
@@ -33,3 +34,5 @@ def read_txt_file(file_path):
         return dict_data
     except():
         print("Can not open file!")
+
+
